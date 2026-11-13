@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" shape-rendering="crispEdges">
+  <!-- an isometric grass block, stamped with a red 岛 seal -->
+  <path d="M32 4 60 18 32 32 4 18Z" fill="#6cc04a"/>
+  <path d="M32 9 50 18 32 27 14 18Z" fill="#7ed257"/>
+  <path d="M20 15h4v2h-4zM38 12h4v2h-4zM40 22h4v2h-4zM26 24h4v2h-4z" fill="#5aa83b"/>
+  <path d="M4 18 32 32V60L4 46Z" fill="#9a6a40"/>
+  <path d="M32 32 60 18V46L32 60Z" fill="#74492a"/>
+  <path d="M4 18 32 32V38L4 24Z" fill="#5aa83b"/>
+  <path d="M32 32 60 18V24L32 38Z" fill="#46892d"/>
+  <path d="M8 24v4l3 1.5v-4zM16 28v5l3 1.5v-5zM24 32v3l3 1.5v-3zM36 36v4l3-1.5v-4zM46 31v5l3-1.5v-5zM54 27v3l3-1.5v-3z" fill="#5aa83b"/>
+  <path d="M10 34l4 2v3l-4-2zM20 42l4 2v3l-4-2zM12 44l3 1.5v3l-3-1.5z" fill="#86593a"/>
+  <path d="M40 44l4-2v3l-4 2zM50 40l4-2v3l-4 2z" fill="#5f3b22"/>
+  <rect x="38" y="38" width="24" height="24" rx="4" fill="#d62f2f" stroke="#fff" stroke-width="2"/>
+  <text x="50" y="57" font-size="19" text-anchor="middle" fill="#fff" font-family="'PingFang SC','Noto Sans SC','Microsoft YaHei',sans-serif" font-weight="700" shape-rendering="auto">岛</text>
+</svg>

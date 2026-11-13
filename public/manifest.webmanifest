@@ -1,0 +1,14 @@
+{
+  "name": "方块岛 CubeDao",
+  "short_name": "方块岛",
+  "description": "A block island where everything speaks Mandarin.",
+  "start_url": "/",
+  "display": "fullscreen",
+  "background_color": "#08131f",
+  "theme_color": "#0f1e2e",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
