@@ -60,7 +60,8 @@
   #stick i { position: absolute; left: 40px; top: 40px; width: 50px; height: 50px; border-radius: 50%; background: #fff8; pointer-events: none; }
   #tbtn { position: fixed; right: 20px; bottom: 120px; display: grid; grid-template-columns: 64px 64px; gap: 10px; }
   #ttop { position: fixed; right: 12px; top: 120px; display: grid; grid-template-columns: 64px 64px; gap: 8px; }
-  #tip { position: absolute; left: 12px; bottom: 12px; max-width: 340px; background: var(--glass); border-left: 4px solid var(--gold); border-radius: 10px; padding: 8px 12px; font: 14px/1.4 system-ui, "PingFang SC", sans-serif; text-shadow: none; }
+  #tip { position: absolute; left: 12px; bottom: 146px; max-width: 340px; background: var(--glass); border-left: 4px solid var(--gold); border-radius: 10px; padding: 8px 12px; font: 14px/1.4 system-ui, "PingFang SC", sans-serif; text-shadow: none; }
+  /* bottom: above the hotbar, so a tip is never hidden behind slots 1-2 */
   #tip b { color: #ffd640; display: block; }
   #tip[hidden] { display: none; }
   #panel .notes { max-width: 620px; text-align: left; font: 15px/1.5 system-ui, "PingFang SC", sans-serif; margin: 4px 8px 12px; }
@@ -96,7 +97,7 @@
   body.py2 rt { visibility: hidden; }
   body.en1 .en { display: none !important; }
   /* listening practice: what villagers say is blurred until you hold T (R says it again) */
-  body.ear1:not(.peek) .bubble .s, body.ear1:not(.peek) #quest .s { filter: blur(9px); }
+  body.ear1:not(.peek) .bubble .s, body.ear1:not(.peek) #quest .s, body.ear1:not(.peek) #panel .tasks .s { filter: blur(9px); }
   body.peek .en { display: inline !important; }
   body.peek .s > .en { display: block !important; }
   body.peek .s .w > .en { display: none !important; }
@@ -142,6 +143,13 @@
   #opts { display: flex; flex-direction: column; gap: 8px; }
   #opts button { justify-content: space-between; font: 15px system-ui, sans-serif; padding: 10px 16px; }
   #opts button b { color: var(--gold); font-weight: 600; }
+  #opts .lang { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; font: 15px system-ui, sans-serif; color: #fff; text-shadow: 0 1px 2px #0008;
+    background: #ffffff12; border: 1px solid #ffffff30; border-radius: 12px; transition: background .15s, transform .15s, border-color .15s; }
+  #opts .lang:hover, #opts .lang:focus-within { background: #ffffff26; border-color: var(--gold); transform: translateX(6px); }
+  #opts select { appearance: none; font: 600 15px system-ui, sans-serif; color: var(--gold); background: transparent; border: none; outline: none; cursor: pointer; text-align: right; padding-right: 18px;
+    background-image: linear-gradient(45deg, transparent 50%, var(--gold) 50%), linear-gradient(135deg, var(--gold) 50%, transparent 50%); background-size: 5px 5px; background-position: right 6px center, right 1px center; background-repeat: no-repeat; }
+  #opts option { color: #fff; background: #1b2a3c; }
+  #ver { opacity: .6; letter-spacing: 1px; text-transform: none; }
   #novoice { color: #ffe9a0; font-size: 13px !important; }
   @keyframes rise { from { opacity: 0; transform: translateY(14px); } }
   @keyframes bob { 50% { transform: translateY(-6px) rotate(-2deg); } }
@@ -188,6 +196,8 @@
   #panel .col button { min-width: 460px; }
   #panel small { font: 14px system-ui, sans-serif; opacity: .85; }
   #panel p.full, #panel p.sum { font-size: 26px; }
+  #panel .tick { color: var(--gold); }
+  .page b { white-space: nowrap; } /* 老师 in the help never splits over two lines */
   #panel .full .en { display: inline; } #panel .full rt { visibility: visible; }
   #panel .welcome { display: grid; grid-template-columns: repeat(2, minmax(0, 280px)); gap: 12px; margin: 10px; }
   #panel .welcome div { background: #ffffff10; border: 1px solid #ffffff26; border-radius: 14px; padding: 14px; text-align: left; }
@@ -208,6 +218,13 @@
     #tip { left: 50%; transform: translateX(-50%); bottom: auto; top: 96px; font-size: 12px; max-width: 70vw; }
     .slot { font-size: 13px; min-width: 38px; padding: 3px 4px; } .slot .ic { width: 22px; height: 22px; }
   }
+  /* portrait phones (after the phone rules above, so these win): one compact row of icons and counts under the touch controls (the word is said when you pick one) */
+  @media (max-width: 640px) and (orientation: portrait) {
+    #hotbar { flex-wrap: nowrap; gap: 3px; bottom: 8px; } #hotbar .slot { min-width: 0; padding: 3px 4px 1px; } #hotbar .slot .w { display: none; } #hotbar .slot::before { display: none; }
+    #info { left: 12px; } #quest { top: 82px; max-width: calc(100vw - 24px); } /* the clock across the top, the request under it, at full width */
+    #tip { top: auto; bottom: 262px; } /* grammar tips just above the touch buttons, not over the request */
+    #toast { top: 34%; } /* below the request, not on it */
+  }
 </style>
 </head>
 <body>
@@ -221,7 +238,7 @@
   <div id="use"></div>
   <div id="hotbar"></div>
   <canvas id="mini" width="176" height="176"></canvas>
-  <div id="hint"><div><kbd>E</kbd> 做东西</div><div><kbd>B</kbd> 背包</div><div><kbd>Q</kbd> 任务</div><div><kbd>M</kbd> 地图</div><div><kbd>C</kbd> 词典</div><div><kbd>H</kbd> 回家</div><div><kbd>R</kbd> 再说一遍</div><div><kbd>T</kbd> translate</div><div><kbd>1-9</kbd> select</div></div>
+  <div id="hint"><div><kbd>E</kbd> 做东西</div><div><kbd>B</kbd> 背包</div><div><kbd>Q</kbd> 任务</div><div><kbd>M</kbd> 地图</div><div><kbd>C</kbd> 词典</div><div><kbd>H</kbd> 回家</div><div><kbd>R</kbd> 再说一遍</div><div><kbd>T</kbd> <span data-t>translate</span></div><div><kbd>1-9</kbd> <span data-t>select</span></div></div>
 </div>
 <!-- the map sits under the touch controls, so the button that closes it stays visible -->
 <canvas id="map" width="512" height="512" hidden></canvas>
@@ -233,43 +250,43 @@
 <div id="panel" class="overlay" hidden></div>
 <div id="start" class="overlay">
   <div class="menu">
-    <header class="brand"><img src="/icon.svg" alt=""><div><h1>方块岛</h1><div class="sub">CubeDao · fāng kuài dǎo</div></div></header>
+    <header class="brand"><img src="/icon.svg" alt=""><div><h1>方块岛</h1><div class="sub">CubeDao · fāng kuài dǎo <span id="ver"></span></div></div></header>
     <p id="progress"></p>
     <nav class="page" data-page="main">
       <button id="play" class="primary"><span id="playzh">开始</span> <small id="playen">Play</small></button>
-      <button data-go="how">怎么玩 <small>How to play</small></button>
-      <button data-go="ach">成就 <small>Achievements</small></button>
-      <button data-go="opts">设置 <small>Settings</small></button>
-      <button data-go="save">存档 <small>Save data</small></button>
+      <button data-go="how">怎么玩 <small data-t>How to play</small></button>
+      <button data-go="ach">成就 <small data-t>Achievements</small></button>
+      <button data-go="opts">设置 <small data-t>Settings</small></button>
+      <button data-go="save">存档 <small data-t>Save data</small></button>
       <button id="wotd" title="hear it"></button>
     </nav>
     <section class="page" data-page="how" hidden>
-      <p><b>CubeDao</b> — a block island where everything speaks Mandarin.</p>
-      <p>Look at things to read their names. Dig, build, farm and cook to hear what you are doing. The <b>老师</b> (teacher) in the pavilion and the other villagers ask for things in Chinese; the paths lead to them. The blackboard in the school has exercises. As you learn a word its English disappears, then its pinyin.</p>
-      <p class="keys"><kbd>WASD</kbd> / arrows move · <kbd>Space</kbd> jump · <kbd>Shift</kbd> run · <kbd>Click</kbd> dig / talk (hold to keep digging) · <kbd>Right-click</kbd> or <kbd>F</kbd> place / use / feed<br>
+      <p data-t><b>CubeDao</b> — a block island where everything speaks Mandarin.</p>
+      <p data-t>Look at things to read their names. Dig, build, farm and cook to hear what you are doing. The <b>老师</b> (teacher) in the pavilion and the other villagers ask for things in Chinese; the paths lead to them. The blackboard in the school has exercises. As you learn a word its English disappears, then its pinyin.</p>
+      <p class="keys" data-t><kbd>WASD</kbd> / arrows move · <kbd>Space</kbd> jump · <kbd>Shift</kbd> run · <kbd>Click</kbd> dig / talk (hold to keep digging) · <kbd>Right-click</kbd> or <kbd>F</kbd> place / use / feed<br>
       <kbd>E</kbd> craft · <kbd>B</kbd> bag · <kbd>Q</kbd> tasks · <kbd>M</kbd> map · <kbd>C</kbd> dictionary · <kbd>H</kbd> go home · <kbd>R</kbd> hear it again, slowly · hold <kbd>T</kbd> translate · <kbd>P</kbd> photo mode (hides everything) · <kbd>Esc</kbd> pause</p>
-      <p class="tkeys">Left stick moves · drag to look · <b>挖</b> dig / talk (hold to keep digging) · <b>放</b> place / use / feed · <b>跳</b> jump · <b>做</b> craft<br><b>译</b> translate · <b>典</b> dictionary · <b>包</b> bag · <b>图</b> map · <b>任</b> tasks · <b>☰</b> menu · tap a slot to hold that item</p>
-      <button data-go="main" class="back">‹ 回去 <small>Back</small></button>
+      <p class="tkeys" data-t>Left stick moves · drag to look · <b>挖</b> dig / talk (hold to keep digging) · <b>放</b> place / use / feed · <b>跳</b> jump · <b>做</b> craft<br><b>译</b> translate · <b>典</b> dictionary · <b>包</b> bag · <b>图</b> map · <b>任</b> tasks · <b>☰</b> menu · tap a slot to hold that item</p>
+      <button data-go="main" class="back">‹ 回去 <small data-t>Back</small></button>
     </section>
     <section class="page" data-page="ach" hidden>
       <div id="ach"></div>
-      <button data-go="main" class="back">‹ 回去 <small>Back</small></button>
+      <button data-go="main" class="back">‹ 回去 <small data-t>Back</small></button>
     </section>
     <section class="page" data-page="opts" hidden>
       <div id="opts"></div>
-      <button data-go="main" class="back">‹ 回去 <small>Back</small></button>
+      <button data-go="main" class="back">‹ 回去 <small data-t>Back</small></button>
     </section>
     <section class="page" data-page="save" hidden>
-      <p>Your island saves itself in this browser. Copy it out to play somewhere else.</p>
-      <button data-o="export">导出 <small>Export save</small></button>
-      <button data-o="import">导入 <small>Import save</small></button>
-      <button data-o="reset" class="danger">重来 <small>Reset progress</small></button>
-      <button data-go="main" class="back">‹ 回去 <small>Back</small></button>
+      <p data-t>Your island saves itself in this browser. Copy it out to play somewhere else.</p>
+      <button data-o="export">导出 <small data-t>Export save</small></button>
+      <button data-o="import">导入 <small data-t>Import save</small></button>
+      <button data-o="reset" class="danger">重来 <small data-t>Reset progress</small></button>
+      <button data-go="main" class="back">‹ 回去 <small data-t>Back</small></button>
     </section>
-    <p id="novoice" hidden>⚠ No Chinese voice found on this device, so words will be silent or mispronounced. Installing a Chinese text-to-speech voice in the system settings fixes that.</p>
+    <p id="novoice" hidden data-t>⚠ No Chinese voice found on this device, so words will be silent or mispronounced. Installing a Chinese text-to-speech voice in the system settings fixes that.</p>
   </div>
 </div>
-<div id="splash"><img src="/icon.svg" alt=""><h1>方块岛</h1><p>CubeDao</p><small>an island that speaks Mandarin</small><i></i></div>
+<div id="splash"><img src="/icon.svg" alt=""><h1>方块岛</h1><p>CubeDao</p><small data-t>an island that speaks Mandarin</small><i></i></div>
 <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

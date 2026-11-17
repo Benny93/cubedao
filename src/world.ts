@@ -174,6 +174,14 @@ export function surface(x: number, z: number) {
   return 0
 }
 
+/** y of a dry floor an animal can stand on within a step of height y in this column (solid below, two free cells above), or -1.
+ * Unlike surface() it sees under roofs and leaves, so pets can walk into a house. */
+export function floorNear(x: number, y: number, z: number) {
+  const free = (y: number) => !BLOCKS[get(x, y, z)].solid && get(x, y, z) !== WATER
+  for (const f of [y, y + 1, y - 1]) if (BLOCKS[get(x, f - 1, z)].solid && free(f) && free(f + 1)) return f
+  return -1
+}
+
 /** Voxel DDA. Returns the first cell whose block satisfies `hit`, plus the face normal it was entered through. */
 export function raycast(o: number[], d: number[], max: number, hit: (id: number) => boolean) {
   const p = o.map(Math.floor), s = d.map(Math.sign), td = d.map(v => Math.abs(1 / v))
@@ -233,6 +241,41 @@ export function relight() {
     }
   }
   return q.length > 0
+}
+
+// --- edits: what the player changed, kept in the save as cell index -> block and laid over the generated island ---
+let edits: Record<number, number> = {}
+/** take the save's edits (the same object is written to from now on) and lay them over the island */
+export function load(saved: Record<number, number>) {
+  edits = saved
+  for (const [i, b] of Object.entries(saved)) data[+i] = b
+}
+type Chunks = [number, number][]
+const around = (x: number, z: number) => { const cx = Math.floor(x / CH), cz = Math.floor(z / CH), out: Chunks = []; for (const dx of [-1, 0, 1]) for (const dz of [-1, 0, 1]) out.push([cx + dx, cz + dz]); return out }
+/** Put block b in a cell and record it in the save. Relights when lamp light is involved, and returns the chunks whose
+ *  meshes changed (some may lie off the island): the cell's own, the neighbours it borders, all nine round it when lit. */
+export function edit(x: number, y: number, z: number, b: number): Chunks {
+  // lamp light only needs redoing when a lantern is placed or removed, or the cell or one next to it is lit
+  const glow = !!LAMPS[b] || !!LAMPS[get(x, y, z)]
+    || [[0, 0, 0], [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]].some(([a, c, d]) => light[idx(x + a, y + c, z + d)] > 0)
+  set(x, y, z, b)
+  edits[idx(x, y, z)] = b
+  if (glow) relight()
+  // faces and corner shadows of neighbouring chunks depend on this block when it sits on a border;
+  // lamp light reaches 15 blocks, so with lanterns about, all nine chunks around are redone
+  const cx = Math.floor(x / CH), cz = Math.floor(z / CH)
+  return around(x, z).filter(([X, Z]) => glow || ((X === cx || x % CH === (X < cx ? 0 : CH - 1)) && (Z === cz || z % CH === (Z < cz ? 0 : CH - 1))))
+}
+/** A sapling becomes a tree th tall: every block it puts down is recorded in the save. Returns the chunks to redraw. */
+export function growTree(x: number, y: number, z: number, th: number): Chunks {
+  // tree() only touches x±2, z±2, y..y+th+1: compare that box before and after
+  const box: number[] = []
+  for (let Y = y; Y <= y + th + 1; Y++) for (let Z = z - 2; Z <= z + 2; Z++) for (let X = x - 2; X <= x + 2; X++) if (inb(X, Y, Z)) box.push(idx(X, Y, Z))
+  const before = box.map(i => data[i])
+  set(x, y, z, AIR); tree(x, y, z, th)
+  box.forEach((i, k) => { if (data[i] !== before[k]) edits[i] = data[i] })
+  relight()
+  return around(x, z)
 }
 
 function quad(o: Buf, x: number, y: number, z: number, c: number[][], tile: number, shade: number, lamp: number, ao?: number[]) {

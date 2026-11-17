@@ -8,7 +8,7 @@ what the villagers ask — in Chinese.
 npm install
 npm run dev      # play at http://localhost:5173
 npm test         # logic checks (vocabulary, quests, crafting, world)
-npm run e2e      # builds, then plays the game in headless Chrome: a smoke test and every quest line (needs Chrome)
+npm run e2e      # builds, then plays the game in headless Chrome: a smoke test, the exam and every quest line (needs Chrome)
 npm run build    # static site in dist/ — deploy as-is (Vercel detects Vite)
 ```
 
@@ -40,8 +40,8 @@ npm run build    # static site in dist/ — deploy as-is (Vercel detects Vite)
 - **Grammar notes** unlock the first time a pattern shows up (measure words, 两, 吗, 了, 的,
   不/没有, 很, 把 …) and stay in the dictionary, where every word can be clicked to hear it.
 - **The world keeps time in Chinese**: 星期一 早上八点 · 晴天. `M` is a map with the places
-  written in characters; `B` is your bag, as 我有… sentences; `Q` lists what everyone is
-  asking for; `H` takes you home (我回家).
+  written in characters (a gold ring marks where the request you follow leads; the minimap points there from its rim); `B` is your bag, as 我有… sentences; `Q` lists what everyone is
+  asking for (✔: you can hand it in now); `H` takes you home (我回家).
 
 ## Playing
 
@@ -53,18 +53,18 @@ list once for the festival. Animals turn to watch you, graze, peck and wag, lie 
 at night (小猫睡觉了), and a sheep stays shorn for a while after you take its wool.
 
 The game opens on a splash and a main menu that flies over the village; `Enter` or 开始 plays,
-`Esc` (or ☰ on touch) pauses back to it. Progress is saved in the browser; the menu's 存档 page
+`Esc` (or ☰ on touch) pauses back to it. Progress is saved in the browser (with the game open in two tabs, the one you are not playing in picks up the other's save rather than overwriting it); the menu's 存档 page
 can export it as text and import it elsewhere, and 设置 has switches for pinyin, English, the voice, the music (a quiet pentatonic zither, made up as it plays), and a listening-only mode in
 which what villagers say is blurred until you hold `T` (`R` repeats the last line slowly).
 
 The menu's 成就 page lists achievements (first request, 50 and 150 words, first fish, a pet,
 a home, the treasure chest, the festival …), worked out from the save, so older saves get theirs too; one
 reached while playing pops up in gold. A minimap in the corner names the places near you; `P` hides
-everything for a photo. The item you hold shows in your hand and swings as you dig. Dry nights have fireflies and crickets; days have the odd bird. A villager whose request you can fulfil right now has a gold bubble with a ✔. Words you have not met yet carry a red 新 mark; reading one for two seconds meets it. 设置 also has a text size switch. A new player first gets a card with the four controls that matter. Sleeping in your bed at night ends the day with a card: 今天我学了…个词, the requests finished and the money earned.
+everything for a photo. The item you hold shows in your hand and swings as you dig. Dry nights have fireflies and crickets; days have the odd bird. A villager whose request you can fulfil right now has a gold bubble with a ✔. Words you have not met yet carry a red 新 mark; reading one for two seconds meets it. 设置 also has a text size switch. A new player first gets a card with the four controls that matter. Sleeping in your bed at night ends the day with a card: 今天我学了…个词 with the day's new words to hear again, the requests finished and the money earned.
 
 Desktop: `WASD` move · `Space` jump · `Shift` run · click dig/talk (hold to keep digging) ·
 right-click or `F` place/use/feed · wheel or `1-9` select. A gamepad works too (sticks walk and look, A jump, RT dig, LT place, LB/RB item, Y repeat, d-pad up map, Start pause). Touch devices get a stick and
-buttons labelled 挖 / 放 / 跳 / 做 / 译 / 典 / 家 / 再 / ☰ (push the stick to its rim to run).
+buttons labelled 挖 / 放 / 跳 / 做 / 译 / 典 / 家 / 再 / ☰ (push the stick to its rim to run). On a phone held upright the hotbar is a single row of icons below the controls (picking one says its name).
 
 ## Code
 
@@ -91,3 +91,8 @@ After changing vocabulary or sentences, record the new lines (only missing clips
 ```
 uv run --with "kokoro>=0.9.4" --with "misaki[zh]" --with soundfile python scripts/voice.py
 ```
+
+## License
+
+[MIT](LICENSE). The voice clips in `public/voice/` were generated with
+[Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (Apache 2.0); [three.js](https://threejs.org) is MIT.

@@ -1,7 +1,8 @@
 // Vocabulary, block definitions, learning progress and quests. No DOM/three imports: testable in node.
+import { t } from './i18n.ts'
 
 export interface Word { hz: string; py: string; en: string }
-const w = (hz: string, py: string, en: string): Word => ({ hz, py, en })
+const w = (hz: string, py: string, en: string): Word => ({ hz, py, en: t(en) }) // en: the meaning in the learner's language
 
 export const NUM = [
   w('零', 'líng', 'zero'), w('一', 'yī', 'one'), w('二', 'èr', 'two'), w('三', 'sān', 'three'),
@@ -284,7 +285,18 @@ export const BLOCKS: Block[] = [
 export const WEEK = ['一', '二', '三', '四', '五', '六', '日'].map((d, i) =>
   w('星期' + d, 'xīngqī ' + (i < 6 ? NUM[i + 1].py : 'rì'), ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][i]))
 /** "八点", "两点": the hour on a 12-hour clock (the time of day word goes in front) */
-export const oclock = (hour: number): Part[] => { const h = Math.floor(hour) % 12 || 12; return [h === 2 ? V.two : numWord(h), V.oclock] }
+export const oclock = (hour: number): Part[] => { const h = Math.floor(hour) % 12 || 12; return [countNum(h), V.oclock] }
+
+/** the game clock, from seconds played: 20 s an hour, 8 min a day, starting at eight on Monday morning */
+export const hourOf = (clock: number) => (8 + clock / 20) % 24
+/** seconds of play from now until the clock next shows that hour */
+export const untilHour = (clock: number, hour: number) => ((24 + hour - hourOf(clock)) % 24) * 20
+/** villagers and animals sleep from nine at night until five */
+export const bedtime = (hour: number) => hour >= 21 || hour < 5
+/** days since the first Monday: 0 on the first day */
+export const dayOf = (clock: number) => Math.floor((160 + clock) / 480)
+/** the part of the day an hour falls in: 早上, 中午 … */
+export const period = (h: number) => h < 5 ? V.dawn : h < 9 ? V.morning : h < 12 ? V.forenoon : h < 13 ? V.noon : h < 18 ? V.afternoon : V.evening
 
 // eight compass points, clockwise from north (-z); east is +x
 export const DIRS = [V.north, w('东北', 'dōngběi', 'northeast'), V.east, w('东南', 'dōngnán', 'southeast'),
@@ -293,19 +305,28 @@ export const dirTo = (dx: number, dz: number) => DIRS[(Math.round(Math.atan2(dx,
 
 export const ALL_WORDS: Word[] = [...WEEK, ...BLOCKS.slice(1).filter((_, i) => i + 1 !== DOOR_OPEN).map(b => b.w), ...Object.values(V), ...DIRS.filter((_, i) => i % 2), ...NUM]
 
+/** size words a species never takes: 大鸡 and 大鸟 read as slang for genitals, 小熊猫 is the red panda */
+export const NO_SIZE = new Map<Word, Word>([[V.chicken, V.big], [V.bird, V.big], [V.panda, V.small]])
+/** pets saved before NO_SIZE (key = kind + size, e.g. 鸡大) become the plain kind, one per key */
+export const migratePets = (keys: string[]) => [...new Set(keys.map(k => [...NO_SIZE].find(([a, z]) => k === a.hz + z.hz)?.[0].hz ?? k))]
+
 // --- progress (localStorage) ---
-interface Save { ach?: string[]; welcomed?: boolean; dayFrom?: { words: number; done: number; money: number }; did: Record<string, number>; base: Record<string, number>; notes: string[]; letters: Record<string, 1>; read: number[]; won: boolean; placed: Record<number, 1>; home?: number[]; world: number; chest: boolean; pets: string[]; rank: number; clock: number; opts: { py: number; en: number; voice: number; ear: number; look: number; invert: number; music: number; ui: number }; pos?: number[]; crops: Record<number, number>; seen: Record<string, number>; quests: Record<string, number>; track: string; money: number; inv: Record<number, number>; edits: Record<number, number> }
+interface Save { ach?: string[]; welcomed?: boolean; dayFrom?: { words: number; done: number; money: number; met?: string[] }; did: Record<string, number>; base: Record<string, number>; notes: string[]; letters: Record<string, 1>; read: number[]; won: boolean; placed: Record<number, 1>; home?: number[]; world: number; chest: boolean; pets: string[]; rank: number; clock: number; opts: { py: number; en: number; voice: number; ear: number; look: number; invert: number; music: number; ui: number; lang: number }; pos?: number[]; crops: Record<number, number>; seen: Record<string, number>; quests: Record<string, number>; track: string; money: number; inv: Record<number, number>; edits: Record<number, number> }
 export const state: Save = (() => {
-  const fresh: Save = { did: {}, base: {}, notes: [], letters: {}, read: [], won: false, placed: {}, world: 0, chest: false, pets: [], rank: 0, clock: 0, opts: { py: 0, en: 0, voice: 0, ear: 0, look: 0, invert: 0, music: 0, ui: 0 }, crops: {}, seen: {}, quests: {}, track: 'teacher', money: 0, inv: {}, edits: {} }
+  const fresh: Save = { did: {}, base: {}, notes: [], letters: {}, read: [], won: false, placed: {}, world: 0, chest: false, pets: [], rank: 0, clock: 0, opts: { py: 0, en: 0, voice: 0, ear: 0, look: 0, invert: 0, music: 0, ui: 0, lang: 0 }, crops: {}, seen: {}, quests: {}, track: 'teacher', money: 0, inv: {}, edits: {} }
   try {
     const old = JSON.parse(localStorage.getItem('cubedao') ?? '{}')
     if (old.quest) { old.quests = { teacher: old.quest }; delete old.quest } // v1 save
+    if (old.pets) old.pets = migratePets(old.pets)
     return { ...fresh, ...old, opts: { ...fresh.opts, ...old.opts } }
   } catch { return fresh }
 })()
 export const persist = () => { try { localStorage.setItem('cubedao', JSON.stringify(state)) } catch { /* private mode: play without saving */ } }
 
 export const see = (word: Word, n = 1) => { state.seen[word.hz] = (state.seen[word.hz] ?? 0) + n }
+/** a wrong answer: the word counts as met n times fewer, so its pinyin and English can come back; a word you have met
+ * stays met (at 1), or it would leave the dictionary and the review pool just when it needs reviewing */
+export const forget = (word: Word, n: number) => { const c = state.seen[word.hz] ?? 0; state.seen[word.hz] = Math.max(Math.min(c, 1), c - n) }
 // 0 = new (hanzi + pinyin + English), 1 = familiar (hanzi + pinyin), 2 = mastered (hanzi only)
 export const level = (word: Word) => { const c = state.seen[word.hz] ?? 0; return c < 4 ? 0 : c < 12 ? 1 : 2 }
 
@@ -328,7 +349,7 @@ const RADICALS: [string, string, string][] = [ // [component, what it means, cha
   ['鸟', 'bird', '鸡'], ['马', 'horse', '骑'], ['宀', 'roof', '家'],
 ]
 /** "扌 hand" for 挖; empty for words of several characters or without a listed component */
-export const radical = (hz: string) => { const r = RADICALS.find(x => x[2].includes(hz)); return r && [...hz].length === 1 ? `${r[0]} ${r[1]}` : '' }
+export const radical = (hz: string) => { const r = RADICALS.find(x => x[2].includes(hz)); return r && [...hz].length === 1 ? `${r[0]} ${t(r[1])}` : '' }
 
 export function html(word: Word) {
   const syl = syllables(word.py), chars = [...word.hz]
@@ -339,28 +360,35 @@ export function html(word: Word) {
   return `<span class="w l${level(word)}">${ruby}<span class="en"> ${word.en}${rad ? ` <i class="rad">${rad}</i>` : ''}</span></span>`
 }
 
-/** 1..999 as Chinese numerals */
+/** 0..99 999 999 as Chinese numerals: 一百零五, 一千零一十五, 两千, 三万两千 */
 export function cn(n: number): string {
+  n = Math.max(0, Math.min(Math.floor(n), 99999999))
   const d = (i: number) => NUM[i].hz
   if (n <= 10) return d(n)
   if (n < 20) return '十' + d(n % 10)
   if (n < 100) return d(n / 10 | 0) + '十' + (n % 10 ? d(n % 10) : '')
-  const r = n % 100
-  return d(n / 100 | 0) + '百' + (r ? (r < 10 ? '零' + d(r) : (r < 20 ? '一' : '') + cn(r)) : '')
+  // after 百, 千 or 万: a gap of a whole place is said 零, and a lone ten is 一十 (一百一十, 一千零一十五)
+  const tail = (r: number, unit: number) => !r ? '' : r < unit / 10 ? '零' + (r < 20 && r >= 10 ? '一' : '') + cn(r) : (r < 20 ? '一' : '') + cn(r)
+  if (n < 1000) return d(n / 100 | 0) + '百' + tail(n % 100, 100)
+  const lead = (k: number) => k === 2 ? '两' : cn(k) // 两千, 两万: a single 2 before 千 and 万 is 两
+  if (n < 10000) return lead(n / 1000 | 0) + '千' + tail(n % 1000, 1000)
+  return lead(n / 10000 | 0) + '万' + tail(n % 10000, 10000)
 }
 
 // --- counting, quests, crafting ---
 export type Part = Word | string
-/** "三块木头": number + measure word + noun. 两, not 二, before a measure word. */
-export const count = (n: number, id: number): Part[] => [n === 2 ? V.two : numWord(n), BLOCKS[id].cl, BLOCKS[id].w]
-/** any number up to 999 as a word, with spaced pinyin so each syllable keeps its tone */
+/** the numeral that goes before a measure word: 两, not 二 */
+export function countNum(n: number): Word { return n === 2 ? V.two : numWord(n) }
+/** "三块木头": number + measure word + noun */
+export const count = (n: number, id: number): Part[] => [countNum(n), BLOCKS[id].cl, BLOCKS[id].w]
+/** any number as a word, with spaced pinyin so each syllable keeps its tone */
 export function numWord(n: number): Word {
   if (n <= 10) return NUM[n]
   const hz = cn(n)
-  return { hz, py: [...hz].map(ch => ch === '百' ? 'bǎi' : NUM.find(x => x.hz === ch)!.py).join(' '), en: String(n) }
+  return { hz, py: [...hz].map(ch => ({ 百: 'bǎi', 千: 'qiān', 万: 'wàn', 两: 'liǎng' } as Record<string, string>)[ch] ?? NUM.find(x => x.hz === ch)!.py).join(' '), en: String(n) }
 }
 /** "五块钱": a price. 块 is the everyday word for yuan. */
-export const price = (n: number): Part[] => [n === 2 ? V.two : numWord(Math.min(n, 999)), V.kuai, V.money] // cn() stops at 999
+export const price = (n: number): Part[] => [countNum(n), V.kuai, V.money]
 
 // --- the merchant: [item, price] ---
 export const SHOP: Record<'buy' | 'sell', [number, number][]> = {
@@ -384,73 +412,72 @@ export function chat(ctx: { period: Word; wet: boolean; hour: number; day: numbe
   const L = (en: string, ...parts: Part[]): Line => ({ parts, en })
   const things = [WOOD, STONE, APPLE, FISH, FLOWER, EGG, PLANK, SEEDS, BAMBOO, MILK]
   const kinds: (() => [Line, Line, Line[], number?] | undefined)[] = [
-    () => [L('How are you?', V.you, V.good, V.ma, '？'), L("I'm very well, thanks.", V.me, V.very, V.good, '，', V.thanks, '。'),
-      [L('I am wood.', V.me, V.am, BLOCKS[WOOD].w, '。'), L('Goodbye!', V.bye, '！')]],
-    () => [L("What's your name?", V.you, V.call, V.what, V.name, '？'), L('My name is Xiao Fang.', V.me, V.call, V.xiaofang, '。'),
-      [L("I'm very well.", V.me, V.very, V.good, '。'), L("You're welcome.", V.welcome, '。')]],
-    () => [L('Thank you!', V.thanks, V.you, '！'), L("You're welcome.", V.welcome, '。'), [L('Hello!', V.hello, '！'), L("I'm hungry.", V.me, V.hungry, V.le, '。')]],
-    () => [L('Goodbye!', V.bye, '！'), L('Goodbye!', V.bye, '！'), [L('Hello!', V.hello, '！'), L('Thanks.', V.thanks, '。')]],
+    () => [L(t('How are you?'), V.you, V.good, V.ma, '？'), L(t("I'm very well, thanks."), V.me, V.very, V.good, '，', V.thanks, '。'),
+      [L(t('I am wood.'), V.me, V.am, BLOCKS[WOOD].w, '。'), L(t('Goodbye!'), V.bye, '！')]],
+    () => [L(t("What's your name?"), V.you, V.call, V.what, V.name, '？'), L(t('My name is Xiao Fang.'), V.me, V.call, V.xiaofang, '。'),
+      [L(t("I'm very well."), V.me, V.very, V.good, '。'), L(t("You're welcome."), V.welcome, '。')]],
+    () => [L(t('Thank you!'), V.thanks, V.you, '！'), L(t("You're welcome."), V.welcome, '。'), [L(t('Hello!'), V.hello, '！'), L(t("I'm hungry."), V.me, V.hungry, V.le, '。')]],
+    () => [L(t('Goodbye!'), V.bye, '！'), L(t('Goodbye!'), V.bye, '！'), [L(t('Hello!'), V.hello, '！'), L(t('Thanks.'), V.thanks, '。')]],
     () => {
-      const p = pick([V.morning, V.afternoon, V.evening]), yes = L('Yes.', V.am, '。'), no = L('No.', V.not, V.am, '。')
-      return [L(`Is it ${p.en} now?`, V.now, V.am, p, V.ma, '？'), p === ctx.period ? yes : no, [p === ctx.period ? no : yes, L('Thanks.', V.thanks, '。')]]
+      const p = pick([V.morning, V.afternoon, V.evening]), yes = L(t('Yes.'), V.am, '。'), no = L(t('No.'), V.not, V.am, '。')
+      return [L(t('Is it {0} now?', p.en), V.now, V.am, p, V.ma, '？'), p === ctx.period ? yes : no, [p === ctx.period ? no : yes, L(t('Thanks.'), V.thanks, '。')]]
     },
     () => {
-      const yes = L("It's raining.", V.rain, V.le, '。'), no = L("It isn't raining.", V.notHave, V.rain, '。')
-      return [L('Is it raining?', V.rain, V.le, V.ma, '？'), ctx.wet ? yes : no, [ctx.wet ? no : yes, L("You're welcome.", V.welcome, '。')]]
+      const yes = L(t("It's raining."), V.rain, V.le, '。'), no = L(t("It isn't raining."), V.notHave, V.rain, '。')
+      return [L(t('Is it raining?'), V.rain, V.le, V.ma, '？'), ctx.wet ? yes : no, [ctx.wet ? no : yes, L(t("You're welcome."), V.welcome, '。')]]
     },
     () => {
       const it = BLOCKS[pick(things)].w, id = BLOCKS.findIndex(b => b.w === it)
-      const yes = L(`I have ${it.en}.`, V.me, V.have, it, '。'), no = L(`I don't have ${it.en}.`, V.me, V.notHave, it, '。')
-      return [L(`Do you have ${it.en}?`, V.you, V.have, it, V.ma, '？'), state.inv[id] ? yes : no, [state.inv[id] ? no : yes, L(`I am ${it.en}.`, V.me, V.am, it, '。')], id]
+      const yes = L(t('I have {0}.', it.en), V.me, V.have, it, '。'), no = L(t("I don't have {0}.", it.en), V.me, V.notHave, it, '。')
+      return [L(t('Do you have {0}?', it.en), V.you, V.have, it, V.ma, '？'), state.inv[id] ? yes : no, [state.inv[id] ? no : yes, L(t('I am {0}.', it.en), V.me, V.am, it, '。')], id]
     },
     () => {
       const m = state.money
-      if (m > 990) return undefined // price() stops at 999, the options would repeat
-      const say = (n: number) => n ? L(`I have ${n}.`, V.me, V.have, ...price(n), '。') : L('I have no money.', V.me, V.notHave, V.money, '。')
-      return [L('How much money do you have?', V.you, V.have, V.howMuch, V.money, '？'), say(m), [say(m + 1), say(m + 3)]]
+      const say = (n: number) => n ? L(t('I have {0} yuan.', n), V.me, V.have, ...price(n), '。') : L(t('I have no money.'), V.me, V.notHave, V.money, '。')
+      return [L(t('How much money do you have?'), V.you, V.have, V.howMuch, V.money, '？'), say(m), [say(m + 1), say(m + 3)]]
     },
     () => {
-      const [a, b, c] = [...things].sort(() => rand() - 0.5), say = (id: number) => L(`This is ${BLOCKS[id].w.en}.`, V.this, V.am, BLOCKS[id].w, '。')
-      return [L('What is this?', V.this, V.am, V.what, '？'), say(a), [say(b), say(c)], a]
+      const [a, b, c] = [...things].sort(() => rand() - 0.5), say = (id: number) => L(t('This is {0}.', BLOCKS[id].w.en), V.this, V.am, BLOCKS[id].w, '。')
+      return [L(t('What is this?'), V.this, V.am, V.what, '？'), say(a), [say(b), say(c)], a]
     },
     () => {
-      const [a, ...rest] = [...FOOD.keys()].sort(() => rand() - 0.5), say = (id: number) => L(`The ${a.en} eats ${BLOCKS[id].w.en}.`, a, V.eat, BLOCKS[id].w, '。')
+      const [a, ...rest] = [...FOOD.keys()].sort(() => rand() - 0.5), say = (id: number) => L(t('The {0} eats {1}.', a.en, BLOCKS[id].w.en), a, V.eat, BLOCKS[id].w, '。')
       const wrong = [...new Set(rest.map(x => FOOD.get(x)!))].filter(id => id !== FOOD.get(a)).slice(0, 2)
-      return [L(`What does the ${a.en} eat?`, a, V.eat, V.what, '？'), say(FOOD.get(a)!), wrong.map(say)]
+      return [L(t('What does the {0} eat?', a.en), a, V.eat, V.what, '？'), say(FOOD.get(a)!), wrong.map(say)]
     },
     () => {
       const k = pick(Object.keys(NPCS)), who = NPCS[k].w, d = ctx.dirTo(k)
       if (!d) return undefined
-      const say = (x: Word) => L(`The ${who.en} is to the ${x.en}.`, who, V.at, x, V.side, '。'), i = DIRS.indexOf(d)
-      return [L(`Where is the ${who.en}?`, who, V.at, V.where, '？'), say(d), [say(DIRS[(i + 3) % 8]), say(DIRS[(i + 5) % 8])]]
+      const say = (x: Word) => L(t('The {0} is to the {1}.', who.en, x.en), who, V.at, x, V.side, '。'), i = DIRS.indexOf(d)
+      return [L(t('Where is the {0}?', who.en), who, V.at, V.where, '？'), say(d), [say(DIRS[(i + 3) % 8]), say(DIRS[(i + 5) % 8])]]
     },
     () => {
       const a = 1 + Math.floor(rand() * 5), b = 1 + Math.floor(rand() * 5), say = (n: number) => L(String(n), NUM[n], '。')
       return [L(`${a} + ${b} = ?`, NUM[a], V.plus, NUM[b], V.equals, V.howMany, '？'), say(a + b), [say(a + b - 1), say(a + b === 10 ? 8 : a + b + 1)]]
     },
     () => {
-      const say = (h: number) => L(`It's ${Math.floor(h) % 12 || 12} o'clock now.`, V.now, ...oclock(h), '。')
-      return [L('What time is it now?', V.now, V.howMany, V.oclock, '？'), say(ctx.hour), [say(ctx.hour + 2), say(ctx.hour + 5)]]
+      const say = (h: number) => L(t("It's {0} o'clock now.", Math.floor(h) % 12 || 12), V.now, ...oclock(h), '。')
+      return [L(t('What time is it now?'), V.now, V.howMany, V.oclock, '？'), say(ctx.hour), [say(ctx.hour + 2), say(ctx.hour + 5)]]
     },
     () => { // 什么颜色: the picture is a flower, cloth or wool
       const [id, col] = pick<[number, Word]>([[FLOWER, V.red], [YFLOWER, V.yellow], [BFLOWER, V.blue], [RCLOTH, V.red], [YCLOTH, V.yellow], [BCLOTH, V.blue], [WOOL, V.white], [SNOW, V.white]])
-      const say = (x: Word) => L(`This is ${x.en}.`, V.this, V.am, x, V.de, '。')
-      return [L('What colour is this?', V.this, V.am, V.what, V.colour, V.de, '？'), say(col), [V.red, V.yellow, V.blue, V.white].filter(x => x !== col).slice(0, 2).map(say), id]
+      const say = (x: Word) => L(t('This is {0}.', x.en), V.this, V.am, x, V.de, '。')
+      return [L(t('What colour is this?'), V.this, V.am, V.what, V.colour, V.de, '？'), say(col), [V.red, V.yellow, V.blue, V.white].filter(x => x !== col).slice(0, 2).map(say), id]
     },
     () => { // 住在哪里
       const [who, place, at] = pick<[Word, Word, string]>([[V.penguin, PLACES.snow, 'on'], [V.camel, PLACES.desert, 'on'], [V.teacher, PLACES.teacher, 'at'], [V.farmer, PLACES.farmer, 'on']])
-      const say = (x: Word) => L(`The ${who.en} lives ${at} the ${x.en}.`, who, V.live, V.at, x, '。')
+      const say = (x: Word) => L(at === 'on' ? t('The {0} lives on the {1}.', who.en, x.en) : t('The {0} lives at the {1}.', who.en, x.en), who, V.live, V.at, x, '。')
       const wrong = [PLACES.snow, PLACES.desert, PLACES.teacher, PLACES.farmer, PLACES.fisher, PLACES.merchant].filter(x => x !== place).sort(() => rand() - 0.5).slice(0, 2)
-      return [L(`Where does the ${who.en} live?`, who, V.live, V.at, V.where, '？'), say(place), wrong.map(say)]
+      return [L(t('Where does the {0} live?', who.en), who, V.live, V.at, V.where, '？'), say(place), wrong.map(say)]
     },
     () => { // 谁: who wants what
       const pairs: [Word, Word][] = [[V.cat, BLOCKS[FISH].w], [V.panda, BLOCKS[BAMBOO].w], [V.pig, BLOCKS[APPLE].w], [V.camel, BLOCKS[CACTUS].w]]
-      const [who, food] = pick(pairs), say = (x: Word) => L(`The ${x.en} eats ${food.en}.`, x, V.eat, food, '。')
-      return [L(`Who eats ${food.en}?`, V.who, V.eat, food, '？'), say(who), pairs.map(p => p[0]).filter(x => x !== who).slice(0, 2).map(say)]
+      const [who, food] = pick(pairs), say = (x: Word) => L(t('The {0} eats {1}.', x.en, food.en), x, V.eat, food, '。')
+      return [L(t('Who eats {0}?', food.en), V.who, V.eat, food, '？'), say(who), pairs.map(p => p[0]).filter(x => x !== who).slice(0, 2).map(say)]
     },
     () => {
-      const say = (d: number) => L(`Today is ${WEEK[d % 7].en}.`, V.today, WEEK[d % 7], '。')
-      return [L('What day is it today?', V.today, V.whichDay, '？'), say(ctx.day), [say(ctx.day + 2), say(ctx.day + 4)]]
+      const say = (d: number) => L(t('Today is {0}.', WEEK[d % 7].en), V.today, WEEK[d % 7], '。')
+      return [L(t('What day is it today?'), V.today, V.whichDay, '？'), say(ctx.day), [say(ctx.day + 2), say(ctx.day + 4)]]
     },
   ]
   for (;;) {
@@ -478,13 +505,17 @@ export function reviewWord(rand = Math.random): Word {
   return pool.find(x => (r -= weight(x)) <= 0) ?? pool[0]
 }
 
+// the dictionary's search box: matches characters, pinyin with or without tone marks or spaces, or English; ü can be typed v or u
+export const searchKey = (w: Word) => { const bare = w.py.replace(/[ǖǘǚǜü]/g, 'v').normalize('NFD').replace(/[\u0300-\u036f]/g, ''); return `${w.hz} ${w.py} ${w.py.replace(/ /g, '')} ${bare} ${bare.replace(/ /g, '')} ${bare.replace(/v/g, 'u')} ${w.en}`.toLowerCase().replace(/ü/g, 'v') } // as the query: so a German or Spanish gloss with ü (fünf, pingüino) is found too
+export const searchHit = (key: string, query: string) => { const q = query.toLowerCase().trim().replace(/ü/g, 'v'); return key.includes(q) || key.includes(q.replace(/ /g, '')) }
+
 // typing pinyin: "ni3 hao3", "nǐhǎo" and "ni3hao3" are the same answer; "ni hao" has the letters but not the tones
 const BARE: Record<string, string> = Object.fromEntries(['aāáǎà', 'eēéěè', 'iīíǐì', 'oōóǒò', 'uūúǔù', 'vǖǘǚǜ'].flatMap(g => [...g].slice(1).map(ch => [ch, g[0]])))
 const numbered = (py: string) => syllables(py).map(([s, t]) => [...s].map(ch => BARE[ch] ?? ch).join('').replace('ü', 'v') + (t < 5 ? t : '')).join('')
 export function checkPinyin(input: string, word: Word): 'right' | 'tones' | 'wrong' {
-  const lower = input.toLowerCase().replace(/u:|ü/g, 'v'), clean = lower.replace(/[\s'5]/g, '')
+  const lower = input.toLowerCase().replace(/u:|ü/g, 'v').replace(/[‘’]/g, "'"), clean = lower.replace(/[\s'5]/g, '')
   // tone marks: split into syllables while the spaces are still there ("qǐ é" is two syllables, "qǐé" would read as one)
-  const typed = /\d/.test(clean) || !/[^a-z]/.test(clean) ? clean : numbered(lower), want = numbered(word.py)
+  const typed = /\d/.test(clean) || !/[^a-z]/.test(clean) ? clean : numbered(lower.replace(/'/g, ' ')), want = numbered(word.py)
   return typed === want ? 'right' : typed.replace(/\d/g, '') === want.replace(/\d/g, '') ? 'tones' : 'wrong'
 }
 
@@ -504,7 +535,7 @@ export interface Npc {
   // an ask is [item, amount] to fetch, or an animal to go and find (click the right one), optionally a big or small one
   // … or a letter to carry to another villager, or something to do a number of times (see ACTS)
   w: Word; asks: ([number, number] | Word | { size: Word; find: Word } | { deliver: string } | { act: string; n: number })[]; rewards: number[]; look: number[] // shirt, trousers, hat
-  say: (c: Part[], it: Word) => Part[]; en: (n: number, it: string) => string
+  say: (c: Part[], it: Word) => Part[]; en: (n: number, it: Word) => string
 }
 export const NPCS: Record<string, Npc> = {
   teacher: {
@@ -513,63 +544,63 @@ export const NPCS: Record<string, Npc> = {
       [BFLOWER, 4], { size: V.small, find: V.sheep }, [DIRT, 6], { size: V.big, find: V.dog }, [LEAVES, 9], V.penguin, V.camel, { act: 'read', n: 1 }],
     rewards: [BRICK, LANTERN, GLASS, TILE, GOLD],
     say: c => [V.hello, '！', V.please, V.give, V.me, ...c, '。'],
-    en: (n, it) => `Hello! Please give me ${n} × ${it}.`,
+    en: (n, it) => t('Hello! Please give me {0} × {1}.', n, it.en),
   },
   carpenter: {
     w: V.carpenter, look: [0x8a5a36, 0x444444, 0xe0b030],
     asks: [[PLANK, 4], [STICK, 6], { deliver: 'tailor' }, [TABLE, 1], [CHAIR, 2], [DOOR, 1], [BED, 1], [SHELF, 1], { act: 'lamp', n: 2 }],
     rewards: [GLASS, BRICK, TILE, LANTERN],
     say: c => [V.you, V.have, ...c, V.ma, '？'],
-    en: (n, it) => `Do you have ${n} × ${it}?`,
+    en: (n, it) => t('Do you have {0} × {1}?', n, it.en),
   },
   farmer: {
     w: V.farmer, look: [0x3c8c32, 0x6b4a2a, 0xe3d49a],
     asks: [[APPLE, 3], [EGG, 2], { deliver: 'cook' }, [MILK, 2], [YFLOWER, 6], [APPLE, 5], [MILK, 3], { act: 'plant', n: 3 }],
     rewards: [LANTERN, GOLD, BRICK],
     say: c => [V.me, V.want, ...c, '。'],
-    en: (n, it) => `I would like ${n} × ${it}.`,
+    en: (n, it) => t('I would like {0} × {1}.', n, it.en),
   },
   fisher: {
     w: V.fisher, look: [0x2a6edc, 0x777777, 0xffffff],
     asks: [[ROD, 1], [FISH, 2], [BOAT, 1], [FISH, 5], { act: 'fish', n: 3 }],
     rewards: [TILE, GLASS, GOLD],
     say: (c, it) => [V.me, V.notHave, it, '。', V.please, V.give, V.me, ...c, '。'],
-    en: (n, it) => `I don't have any ${it}. Please give me ${n}.`,
+    en: (n, it) => t("I don't have any {1}. Please give me {0}.", n, it.en),
   },
   smith: { // what the mountain hides: coal, iron, gold
     w: V.smith, look: [0x444444, 0x222222, 0x8a5a36],
     asks: [[COAL, 3], [IRON, 2], [COAL, 5], [GOLD, 1], [IRON, 4], { act: 'mine', n: 5 }],
     rewards: [LANTERN, GLASS, TILE, BRICK],
     say: c => [V.you, V.able, V.give, V.me, ...c, V.ma, '？'],
-    en: (n, it) => `Can you give me ${n} × ${it}?`,
+    en: (n, it) => t('Can you give me {0} × {1}?', n, it.en),
   },
   tailor: { // colours, and 的 to attach them: 红色的布
     w: V.tailor, look: [0xd98ad0, 0x444444, 0x7b1fa2],
     asks: [[RCLOTH, 1], { deliver: 'fisher' }, [BCLOTH, 2], [YCLOTH, 2]],
     rewards: [GOLD, LANTERN, TILE],
     say: (c, it) => [V.me, V.like, COLOR.get(it)!, '。', V.please, V.give, V.me, c[0], c[1], COLOR.get(it)!, V.de, V.cloth, '。'],
-    en: (n, it) => `I like ${it.replace(' cloth', '')}. Please give me ${n} × ${it}.`,
+    en: (n, it) => t('I like {2}. Please give me {0} × {1}.', n, it.en, COLOR.get(it)!.en),
   },
   explorer: { // on the snow island: warm things
     w: V.explorer, look: [0x2a6edc, 0x333333, 0xd42a20],
     asks: [[WOOL, 2], [GRILLED, 2], [RCLOTH, 2], [BED, 1], { deliver: 'traveller' }, { act: 'feed', n: 2 }],
     rewards: [GOLD, GLASS, LANTERN],
     say: c => [V.me, V.very, V.cold, '。', V.please, V.give, V.me, ...c, '。'],
-    en: (n, it) => `I'm very cold. Please give me ${n} × ${it}.`,
+    en: (n, it) => t("I'm very cold. Please give me {0} × {1}.", n, it.en),
   },
   traveller: { // on the sand island: something to drink, something to eat
     w: V.traveller, look: [0xe3d49a, 0x8a5a36, 0xf4f4f4],
     asks: [[MILK, 2], [APPLE, 3], [MILK, 3], [BREAD, 2], { act: 'ride', n: 1 }],
     rewards: [GOLD, TILE, BRICK],
     say: (c, it) => [V.me, V.very, it === BLOCKS[MILK].w ? V.thirsty : V.hungry, '。', V.you, V.have, ...c, V.ma, '？'],
-    en: (n, it) => `I'm very ${it === 'milk' ? 'thirsty' : 'hungry'}. Do you have ${n} × ${it}?`,
+    en: (n, it) => t(it === BLOCKS[MILK].w ? "I'm very thirsty. Do you have {0} × {1}?" : "I'm very hungry. Do you have {0} × {1}?", n, it.en),
   },
   cook: {
     w: V.cook, look: [0xf4f4f4, 0x333333, 0xf4f4f4],
     asks: [[BREAD, 1], [GRILLED, 2], { deliver: 'teacher' }, [CAKE, 1], [BREAD, 3], { act: 'drink', n: 1 }],
     rewards: [GOLD, LANTERN, GLASS],
     say: c => [V.me, V.hungry, V.le, '。', V.please, V.give, V.me, ...c, '。'],
-    en: (n, it) => `I'm hungry. Please give me ${n} × ${it}.`,
+    en: (n, it) => t("I'm hungry. Please give me {0} × {1}.", n, it.en),
   },
 }
 
@@ -580,41 +611,41 @@ const BA = w('把', 'bǎ', '(marks the thing you act on)')
 
 /** things a villager can ask you to do, as verb phrases: 请种三颗种子。 */
 const ACTS: Record<string, (n: number) => [Part[], string]> = {
-  plant: n => [[V.plant, ...count(n, SEEDS)], `plant ${n} seeds`],
-  fish: n => [[V.angle, ...count(n, FISH)], `catch ${n} fish`],
-  feed: n => [[V.feed, V.penguin, ...count(n, FISH)], `feed a penguin ${n} fish`],
-  read: n => [[V.read, ...count(n, BOOK)], `read ${n} book`],
-  ride: () => [[V.ride, V.camel], 'ride a camel'],
-  mine: n => [[V.dig, ...count(n, STONE)], `dig ${n} stone`],
-  drink: n => [[V.drink, ...count(n, MILK)], `drink ${n} glass of milk`],
-  lamp: n => [[V.put, ...count(n, LANTERN)], `put down ${n} lanterns`],
+  plant: n => [[V.plant, ...count(n, SEEDS)], t('Please plant {0} seeds.', n)],
+  fish: n => [[V.angle, ...count(n, FISH)], t('Please catch {0} fish.', n)],
+  feed: n => [[V.feed, V.penguin, ...count(n, FISH)], t('Please feed a penguin {0} fish.', n)],
+  read: n => [[V.read, ...count(n, BOOK)], t('Please read {0} book.', n)],
+  ride: () => [[V.ride, V.camel], t('Please ride a camel.')],
+  mine: n => [[V.dig, ...count(n, STONE)], t('Please dig {0} stone.', n)],
+  drink: n => [[V.drink, ...count(n, MILK)], t('Please drink {0} glass of milk.', n)],
+  lamp: n => [[V.put, ...count(n, LANTERN)], t('Please put down {0} lanterns.', n)],
 }
 
 /** the second way each villager asks, used on every other lap through their list */
 const ALT: Record<string, Pick<Npc, 'say' | 'en'>> = {
-  teacher: { say: c => [V.you, V.can, V.give, V.me, ...c, V.ma, '？'], en: (n, it) => `Can you give me ${n} × ${it}?` },
-  carpenter: { say: c => [V.me, V.require, ...c, '。'], en: (n, it) => `I need ${n} × ${it}.` },
+  teacher: { say: c => [V.you, V.can, V.give, V.me, ...c, V.ma, '？'], en: (n, it) => t('Can you give me {0} × {1}?', n, it.en) },
+  carpenter: { say: c => [V.me, V.require, ...c, '。'], en: (n, it) => t('I need {0} × {1}.', n, it.en) },
   // 有没有: asking by offering both answers
-  farmer: { say: (c, it) => [V.you, V.have, V.notHave, it, '？', V.me, V.want, c[0], c[1], '。'], en: (n, it) => `Do you have any ${it}? I would like ${n}.` },
-  fisher: { say: c => [V.me, V.want, ...c, '。', V.thanks, '！'], en: (n, it) => `I would like ${n} × ${it}. Thank you!` },
-  smith: { say: (c, it) => [V.me, V.notHave, it, V.le, '。', V.please, V.give, V.me, ...c, '。'], en: (n, it) => `I'm out of ${it}. Please give me ${n}.` },
-  tailor: { say: (c, it) => [V.you, V.have, c[0], c[1], COLOR.get(it)!, V.de, V.cloth, V.ma, '？'], en: (n, it) => `Do you have ${n} × ${it}?` },
-  explorer: { say: c => [V.here, V.very, V.cold, '！', V.me, V.require, ...c, '。'], en: (n, it) => `It's very cold here! I need ${n} × ${it}.` },
-  traveller: { say: (c, it) => [V.here, V.very, V.hot, '！', V.me, V.wantTo, it === BLOCKS[MILK].w ? V.drink : V.eat, ...c, '。'], en: (n, it) => `It's very hot here! I want to ${it === 'milk' ? 'drink' : 'eat'} ${n} × ${it}.` },
-  cook: { say: c => [V.me, V.very, V.hungry, '。', V.me, V.wantTo, V.eat, ...c, '。'], en: (n, it) => `I'm very hungry. I want to eat ${n} × ${it}.` },
+  farmer: { say: (c, it) => [V.you, V.have, V.notHave, it, '？', V.me, V.want, c[0], c[1], '。'], en: (n, it) => t('Do you have any {1}? I would like {0}.', n, it.en) },
+  fisher: { say: c => [V.me, V.want, ...c, '。', V.thanks, '！'], en: (n, it) => t('I would like {0} × {1}. Thank you!', n, it.en) },
+  smith: { say: (c, it) => [V.me, V.notHave, it, V.le, '。', V.please, V.give, V.me, ...c, '。'], en: (n, it) => t("I'm out of {1}. Please give me {0}.", n, it.en) },
+  tailor: { say: (c, it) => [V.you, V.have, c[0], c[1], COLOR.get(it)!, V.de, V.cloth, V.ma, '？'], en: (n, it) => t('Do you have {0} × {1}?', n, it.en) },
+  explorer: { say: c => [V.here, V.very, V.cold, '！', V.me, V.require, ...c, '。'], en: (n, it) => t("It's very cold here! I need {0} × {1}.", n, it.en) },
+  traveller: { say: (c, it) => [V.here, V.very, V.hot, '！', V.me, V.wantTo, it === BLOCKS[MILK].w ? V.drink : V.eat, ...c, '。'], en: (n, it) => t(it === BLOCKS[MILK].w ? "It's very hot here! I want to drink {0} × {1}." : "It's very hot here! I want to eat {0} × {1}.", n, it.en) },
+  cook: { say: c => [V.me, V.very, V.hungry, '。', V.me, V.wantTo, V.eat, ...c, '。'], en: (n, it) => t("I'm very hungry. I want to eat {0} × {1}.", n, it.en) },
 }
 
 export function quest(key: string, i = state.quests[key] ?? 0) {
   const npc = NPCS[key], ask = npc.asks[i % npc.asks.length], reward = npc.rewards[i % npc.rewards.length]
-  if (!Array.isArray(ask) && 'act' in ask) { // do something yourself; main.ts counts it in state.did
+  if (!Array.isArray(ask) && 'act' in ask) { // do something yourself: act() counts it, did() reads it
     const [parts, en] = ACTS[ask.act](ask.n)
-    return { find: undefined, size: undefined, deliver: undefined, act: ask.act as string | undefined, item: 0, n: ask.n, reward, parts: [V.please, ...parts, '。'] as Part[], en: `Please ${en}.` }
+    return { find: undefined, size: undefined, deliver: undefined, act: ask.act as string | undefined, item: 0, n: ask.n, reward, parts: [V.please, ...parts, '。'] as Part[], en }
   }
   if (!Array.isArray(ask) && 'deliver' in ask) { // 把 puts the thing being handled before the verb: 请把这封信给裁缝
     const to = NPCS[ask.deliver].w
     return {
       find: undefined, size: undefined, deliver: ask.deliver as string | undefined, act: undefined, item: 0, n: 0, reward,
-      parts: [V.please, BA, V.this, V.feng, BLOCKS[LETTER].w, V.give, to, '。'] as Part[], en: `Please take this letter to the ${to.en}.`,
+      parts: [V.please, BA, V.this, V.feng, BLOCKS[LETTER].w, V.give, to, '。'] as Part[], en: t('Please take this letter to the {0}.', to.en),
     }
   }
   if (!Array.isArray(ask)) {
@@ -623,13 +654,13 @@ export function quest(key: string, i = state.quests[key] ?? 0) {
       find: find as Word | undefined, size, deliver: undefined, act: undefined, item: 0, n: 0, reward,
       // 头 counts big animals, 只 the rest
       parts: [V.please, V.find, NUM[1], find === V.pig || find === V.cow || find === V.camel ? V.tou : V.zhi, ...(size ? [size] : []), find, '。'] as Part[],
-      en: `Please find a ${size ? size.en + ' ' : ''}${find.en}.`,
+      en: size ? t('Please find a {0} {1}.', size.en, find.en) : t('Please find a {0}.', find.en),
     }
   }
   const [item, base] = ask, it = BLOCKS[item].w
   const lap = Math.floor(i / npc.asks.length), form = lap % 2 ? ALT[key] : npc
   const n = Math.min(10, base + lap) // each lap asks for one more
-  return { find: undefined, size: undefined, deliver: undefined, act: undefined, item, n, reward, parts: form.say(count(n, item), it), en: form.en(n, it.en) }
+  return { find: undefined, size: undefined, deliver: undefined, act: undefined, item, n, reward, parts: form.say(count(n, item), it), en: form.en(n, it) }
 }
 
 /** what each animal eats: feeding teaches 猫吃鱼 / 猪不吃竹子 */
@@ -695,6 +726,61 @@ export function craft(i: number) {
   state.inv[r.out[0]] = (state.inv[r.out[0]] ?? 0) + r.out[1]
   return true
 }
+
+/** count something the player did, for villagers who asked them to do it: 请钓三条鱼 */
+export const act = (what: string) => { state.did[what] = (state.did[what] ?? 0) + 1 }
+/** un-count it (taking your own lantern back), without pushing anyone's request further away */
+export function unact(what: string) {
+  state.did[what] = Math.max(0, (state.did[what] ?? 0) - 1)
+  for (const k in state.base) if (quest(k).act === what) state.base[k] = Math.min(state.base[k], state.did[what])
+}
+/** how often the thing a villager asked you to do has been done since they asked */
+export const did = (k: string) => Math.max(0, (state.did[quest(k).act ?? ''] ?? 0) - (state.base[k] ?? 0)) // never negative: an un-counted lantern can dip below the baseline
+/** can villager k's request be handed in now: done often enough, or the things they asked for in your bag (finding an animal and carrying a letter are answered elsewhere) */
+export function ready(k: string) {
+  const q = quest(k)
+  return q.act ? did(k) >= q.n : !q.deliver && !q.find && (state.inv[q.item] ?? 0) >= q.n
+}
+/** a villager's request is done: pay the reward and move them on to their next request.
+ *  True when that finished every villager's whole list, once: the festival. */
+export function complete(k: string): boolean {
+  const q = quest(k)
+  state.inv[q.reward] = (state.inv[q.reward] ?? 0) + 12
+  state.money += 3
+  state.quests[k] = (state.quests[k] ?? 0) + 1
+  const next = quest(k).act
+  if (next) state.base[k] = state.did[next] ?? 0 // their next request is something to do: count from now
+  if (quest(k).deliver && !state.letters[k]) { state.seen['把字句'] ??= 1; state.letters[k] = 1; state.inv[LETTER] = (state.inv[LETTER] ?? 0) + 1 } // their next errand is a letter: here it is
+  if (state.won || !Object.keys(NPCS).every(n => (state.quests[n] ?? 0) >= NPCS[n].asks.length)) return false
+  state.won = true
+  return true
+}
+/** hand villager k a letter someone else gave you for them; returns that sender, whose errand is now done */
+export function handOver(k: string) {
+  const from = Object.keys(state.letters).find(g => quest(g).deliver === k)
+  if (from) { delete state.letters[from]; state.inv[LETTER] = Math.max(0, (state.inv[LETTER] ?? 0) - 1) }
+  return from
+}
+
+/** requests finished, all villagers together */
+export const done = () => Object.values(state.quests).reduce((a, b) => a + b, 0)
+// achievements (成就): read straight off the save, so old saves get theirs too. Listed in the menu; one reached while playing pops up
+export const ACH: [Word, string, () => unknown][] = ([
+  ['新朋友', 'xīn péngyou', 'New friend: finish a first request', () => Object.values(state.quests).some(n => n > 0)],
+  ['好帮手', 'hǎo bāngshou', 'Good helper: finish 20 requests', () => done() >= 20],
+  ['小学生', 'xiǎoxuéshēng', 'Pupil: meet 50 words', () => known() >= 50],
+  ['大学生', 'dàxuéshēng', 'Scholar: meet 150 words', () => known() >= 150],
+  ['钓鱼', 'diàoyú', 'Angler: catch a fish', () => state.did.fish],
+  ['农民', 'nóngmín', 'Farmer: plant a seed', () => state.did.plant],
+  ['矿工', 'kuànggōng', 'Miner: dig stone with a pickaxe', () => state.did.mine],
+  ['宠物', 'chǒngwù', 'Pet: tame an animal', () => state.pets.length],
+  ['我的家', 'wǒ de jiā', 'Home: make a bed your home', () => state.home],
+  ['读书', 'dúshū', 'Reader: read a book', () => state.did.read || state.read.length],
+  ['骑骆驼', 'qí luòtuo', 'Rider: ride the camel', () => state.did.ride],
+  ['有钱人', 'yǒuqiánrén', 'Rich: have 100 块钱', () => state.money >= 100],
+  ['宝藏', 'bǎozàng', 'Treasure: open the treasure chest', () => state.chest],
+  ['节日', 'jiérì', "Festival: finish every villager's list", () => state.won],
+] as const).map(([hz, py, en, ok]) => [{ hz, py, en: t(en).split(':')[0] }, t(en), ok])
 
 export const isWord = (p: Part): p is Word => typeof p !== 'string'
 export const plain = (parts: Part[]) => parts.map(p => isWord(p) ? p.hz : p).join('')
@@ -813,9 +899,9 @@ export const NOTES: [string, string][] = [ // [trigger hanzi, note]
 /** notes whose trigger has been met but that have not been shown yet; marks them shown */
 export function newNotes(): string[] {
   const out: string[] = []
-  for (const [hz, note] of NOTES) {
+  for (const [hz, note] of NOTES) { // saved in English, so changing the language does not show them again
     if (state.notes.includes(note) || !(hz === '*' ? Object.keys(state.seen).length : state.seen[hz])) continue
-    state.notes.push(note); out.push(note)
+    state.notes.push(note); out.push(t(note))
   }
   return out
 }
@@ -826,7 +912,7 @@ export interface Quiz { word: Word; prompt: Part[]; en: string; options: string[
 /** measure words: "三＿木头". Distractors never include 个 or 堆 (nearly always tolerable) or a second classifier that is also right. */
 const ALSO: Record<string, string> = {
   木头: '根', 椅子: '张', 蛋糕: '个', 瓦: '块', 竹子: '棵', 船: '只', 猪: '只', 牛: '只', 骆驼: '只匹', 门: '个', 种子: '粒把',
-  面包: '块片条', 玻璃: '片', 熊猫: '头', 鸡蛋: '颗', 苹果: '颗', 石头: '颗', 狗: '条',
+  面包: '块片条', 玻璃: '片', 熊猫: '头', 鸡蛋: '颗', 苹果: '颗', 石头: '颗', 狗: '条', 鱼竿: '把', 羊: '头',
 }
 export function clQuiz(rand = Math.random): Quiz {
   const pick = <T>(a: T[]) => a[Math.floor(rand() * a.length)]
@@ -835,7 +921,7 @@ export function clQuiz(rand = Math.random): Quiz {
     ...[V.cat, V.dog, V.sheep, V.chicken, V.panda, V.bird, V.penguin].map(a => [a, V.zhi] as [Word, Word]),
     ...[V.pig, V.cow, V.camel].map(a => [a, V.tou] as [Word, Word]),
   ]
-  const [word, cl] = pick(things), n = 1 + Math.floor(rand() * 9), num = n === 2 ? V.two : NUM[n]
+  const [word, cl] = pick(things), n = 1 + Math.floor(rand() * 9), num = countNum(n)
   const others = [...new Set(things.map(t => t[1]))].filter(c => c !== cl && c !== V.ge && c !== V.dui && !(ALSO[word.hz] ?? '').includes(c.hz))
   const opts = [cl]
   while (opts.length < 4) { const o = pick(others); if (!opts.includes(o)) opts.push(o) }
@@ -862,14 +948,14 @@ export function numQuiz(rand = Math.random): Quiz {
   const opts = [n]
   for (const x of near) if (opts.length < 4 && !opts.includes(x)) opts.push(x)
   for (let i = 3; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [opts[i], opts[j]] = [opts[j], opts[i]] }
-  return { word: numWord(n), prompt: ['？'], en: 'Which number do you hear?', options: opts.map(String), answer: opts.indexOf(n), reveal: [numWord(n)] }
+  return { word: numWord(n), prompt: ['？'], en: t('Which number do you hear?'), options: opts.map(String), answer: opts.indexOf(n), reveal: [numWord(n)] }
 }
 
 // --- books: short stories made only of words the island teaches ---
 /** "我|有|一|只|小|猫|。" -> a Line; every token must be a known word or punctuation */
 function S(text: string, en: string): Line {
   const lex = new Map(ALL_WORDS.map(x => [x.hz, x]))
-  return { en, parts: text.split('|').map(t => lex.get(t) ?? (/^[。，！？：]$/.test(t) ? t : (() => { throw new Error('story word not in vocabulary: ' + t) })())) }
+  return { en: t(en), parts: text.split('|').map(t => lex.get(t) ?? (/^[。，！？：]$/.test(t) ? t : (() => { throw new Error('story word not in vocabulary: ' + t) })())) }
 }
 export const STORIES: { title: Word; lines: Line[] }[] = [
   { title: V.cat, lines: [
